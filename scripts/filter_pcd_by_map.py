@@ -1,0 +1,345 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+智能点云过滤脚本
+比对原始地图和清理地图，根据差异过滤点云
+"""
+
+import numpy as np
+import open3d as o3d
+import json
+import os
+import sys
+import argparse
+import cv2
+import yaml
+from tqdm import tqdm
+
+
+class PCDMapFilter:
+    def __init__(self, z_range_json_path, map_name, map_base_dir):
+        """
+        初始化点云地图过滤器
+        
+        Args:
+            z_range_json_path: z轴范围数据JSON文件路径
+            map_name: 地图名称
+            map_base_dir: 地图基础目录
+        """
+        self.z_range_json_path = z_range_json_path
+        self.map_name = map_name
+        self.map_dir = os.path.join(map_base_dir, map_name)
+        
+        self.z_data = None
+        self.pcd = None
+        self.original_map = None
+        self.cleaned_map = None
+        self.map_info = None
+        
+    def load_z_range_data(self):
+        """加载z轴范围数据"""
+        print(f"加载配置: {self.z_range_json_path}")
+        
+        with open(self.z_range_json_path, 'r') as f:
+            self.z_data = json.load(f)
+        
+        print(f"地面z范围: [{self.z_data['ground_z_range']['min']:.3f}, "
+              f"{self.z_data['ground_z_range']['max']:.3f}]")
+        
+        return True
+    
+    def load_pcd(self):
+        """加载PCD点云"""
+        pcd_path = self.z_data['output_pcd']
+        
+        if not os.path.exists(pcd_path):
+            print(f"错误: PCD文件不存在: {pcd_path}")
+            return False
+        
+        print(f"\n加载PCD: {pcd_path}")
+        self.pcd = o3d.io.read_point_cloud(pcd_path)
+        points = np.asarray(self.pcd.points)
+        print(f"点云数量: {len(points)}")
+        
+        return True
+    
+    def load_maps(self):
+        """加载原始地图和清理地图"""
+        original_map_path = os.path.join(self.map_dir, f"{self.map_name}.pgm")
+        cleaned_map_path = os.path.join(self.map_dir, f"{self.map_name}_cleaned.pgm")
+        map_yaml_path = os.path.join(self.map_dir, f"{self.map_name}.yaml")
+        
+        # 检查文件存在
+        if not os.path.exists(original_map_path):
+            print(f"错误: 原始地图不存在: {original_map_path}")
+            return False
+        
+        if not os.path.exists(cleaned_map_path):
+            print(f"错误: 清理地图不存在: {cleaned_map_path}")
+            return False
+        
+        if not os.path.exists(map_yaml_path):
+            print(f"错误: 地图配置不存在: {map_yaml_path}")
+            return False
+        
+        # 加载地图图像
+        print(f"\n加载地图:")
+        print(f"  原始地图: {original_map_path}")
+        print(f"  清理地图: {cleaned_map_path}")
+        
+        self.original_map = cv2.imread(original_map_path, cv2.IMREAD_GRAYSCALE)
+        self.cleaned_map = cv2.imread(cleaned_map_path, cv2.IMREAD_GRAYSCALE)
+        
+        # 加载地图配置
+        with open(map_yaml_path, 'r') as f:
+            self.map_info = yaml.safe_load(f)
+        
+        print(f"  分辨率: {self.map_info['resolution']} m/pixel")
+        print(f"  原点: {self.map_info['origin']}")
+        print(f"  地图尺寸: {self.original_map.shape}")
+        
+        return True
+    
+    def find_erased_regions(self, threshold=30):
+        """找出被擦除的区域"""
+        print(f"\n分析擦除区域...")
+        
+        # 比对两张地图的差异
+        # 在cleared_map中，擦除的地方会变成白色（255）或更亮
+        # 原始地图中，障碍物是黑色（0），自由空间是白色（255），未知是灰色（205）
+        
+        # 找出清理地图中变亮的区域（被擦除的障碍物）
+        diff = self.cleaned_map.astype(int) - self.original_map.astype(int)
+        
+        # 调试信息
+        print(f"地图差异统计:")
+        print(f"  最大变化: {diff.max()}")
+        print(f"  最小变化: {diff.min()}")
+        print(f"  变亮像素数 (>0): {np.sum(diff > 0)}")
+        print(f"  变暗像素数 (<0): {np.sum(diff < 0)}")
+        
+        # 擦除区域：清理地图比原始地图亮的地方（阈值可调）
+        erased_mask = diff > threshold
+        
+        erased_pixels = np.argwhere(erased_mask)
+        print(f"擦除像素数量 (阈值>{threshold}): {len(erased_pixels)}")
+        
+        if len(erased_pixels) == 0:
+            print(f"警告: 未检测到擦除区域，请检查是否已编辑地图")
+        
+        return erased_mask
+    
+    def map_pixels_to_world_coords(self, erased_mask):
+        """将地图像素坐标转换为世界坐标"""
+        print(f"\n转换像素坐标到世界坐标...")
+        
+        # 获取地图参数
+        resolution = self.map_info['resolution']  # m/pixel
+        origin_x = self.map_info['origin'][0]  # 地图原点在世界坐标系中的x
+        origin_y = self.map_info['origin'][1]  # 地图原点在世界坐标系中的y
+        
+        height, width = erased_mask.shape
+        
+        # 获取擦除区域的像素坐标
+        erased_pixels = np.argwhere(erased_mask)
+        
+        if len(erased_pixels) == 0:
+            print("没有擦除任何区域")
+            return []
+        
+        # 转换坐标
+        # 在PGM图像中：
+        # - 图像坐标 (row, col)，其中 row=0 在图像顶部
+        # - 世界坐标：需要根据origin和resolution转换
+        # 
+        # 世界坐标 = origin + pixel * resolution
+        # 注意：图像的y轴是向下的，而世界坐标的y轴是向上的
+        
+        erased_regions = []
+        for row, col in erased_pixels:
+            # 将图像坐标转换为世界坐标
+            # 注意：图像row从上到下增加，但世界y从下到上增加
+            world_x = origin_x + col * resolution
+            world_y = origin_y + (height - 1 - row) * resolution
+            
+            erased_regions.append([world_x, world_y])
+        
+        erased_regions = np.array(erased_regions)
+        print(f"\n擦除区域世界坐标范围:")
+        print(f"  X: [{erased_regions[:, 0].min():.3f}, {erased_regions[:, 0].max():.3f}]")
+        print(f"  Y: [{erased_regions[:, 1].min():.3f}, {erased_regions[:, 1].max():.3f}]")
+        print(f"地图参数:")
+        print(f"  分辨率: {resolution} m/pixel")
+        print(f"  原点: ({origin_x:.3f}, {origin_y:.3f})")
+        print(f"  地图尺寸: {width} x {height} 像素")
+        
+        return erased_regions
+    
+    def filter_points(self, erased_regions):
+        """根据擦除区域过滤点云（高效版本）"""
+        print(f"\n过滤点云...")
+        
+        points = np.asarray(self.pcd.points)
+        
+        if len(erased_regions) == 0:
+            print("没有需要过滤的区域，保留所有点")
+            return self.pcd
+        
+        # 获取地面z范围
+        ground_z_min = self.z_data['ground_z_range']['min']
+        ground_z_max = self.z_data['ground_z_range']['max']
+        
+        # 地图参数
+        resolution = self.map_info['resolution']
+        origin_x = self.map_info['origin'][0]
+        origin_y = self.map_info['origin'][1]
+        
+        # 方法：使用网格哈希表快速查询
+        # 1. 将擦除区域栅格化到网格单元，存入集合
+        print("构建擦除区域哈希表...")
+        erased_grid_set = set()
+        for x, y in tqdm(erased_regions, desc="构建哈希表", unit="像素"):
+            # 将世界坐标转换为网格索引（必须与map_pixels_to_world_coords对应）
+            grid_x = int(np.round((x - origin_x) / resolution))
+            grid_y = int(np.round((y - origin_y) / resolution))
+            erased_grid_set.add((grid_x, grid_y))
+        
+        print(f"擦除网格单元数: {len(erased_grid_set)}")
+        
+        # 调试：显示网格范围
+        if len(erased_grid_set) > 0:
+            grid_coords = np.array(list(erased_grid_set))
+            print(f"擦除网格索引范围:")
+            print(f"  Grid X: [{grid_coords[:, 0].min()}, {grid_coords[:, 0].max()}]")
+            print(f"  Grid Y: [{grid_coords[:, 1].min()}, {grid_coords[:, 1].max()}]")
+        
+        # 2. 向量化处理点云
+        print("\n检查点云...")
+        
+        # 显示点云范围
+        print(f"点云世界坐标范围:")
+        print(f"  X: [{points[:, 0].min():.3f}, {points[:, 0].max():.3f}]")
+        print(f"  Y: [{points[:, 1].min():.3f}, {points[:, 1].max():.3f}]")
+        print(f"  Z: [{points[:, 2].min():.3f}, {points[:, 2].max():.3f}]")
+        
+        # 分离地面点和非地面点
+        z_coords = points[:, 2]
+        is_ground = (z_coords >= ground_z_min) & (z_coords <= ground_z_max)
+        
+        # 地面点直接保留
+        keep_mask = is_ground.copy()
+        
+        # 对于非地面点，检查是否在擦除区域
+        non_ground_indices = np.where(~is_ground)[0]
+        
+        if len(non_ground_indices) > 0:
+            # 将非地面点的xy坐标栅格化
+            non_ground_points = points[non_ground_indices]
+            grid_x = np.round((non_ground_points[:, 0] - origin_x) / resolution).astype(int)
+            grid_y = np.round((non_ground_points[:, 1] - origin_y) / resolution).astype(int)
+            
+            # 批量检查是否在擦除集合中
+            for idx, (gx, gy) in enumerate(tqdm(zip(grid_x, grid_y), 
+                                                  total=len(grid_x),
+                                                  desc="过滤点云",
+                                                  unit="点")):
+                point_idx = non_ground_indices[idx]
+                # 如果不在擦除区域，则保留
+                if (gx, gy) not in erased_grid_set:
+                    keep_mask[point_idx] = True
+        
+        # 统计
+        num_removed = np.sum(~keep_mask)
+        num_kept = np.sum(keep_mask)
+        num_ground_kept = np.sum(is_ground)
+        
+        print(f"\n过滤结果:")
+        print(f"  原始点数: {len(points)}")
+        print(f"  地面点数: {num_ground_kept} (豁免)")
+        print(f"  移除点数: {num_removed}")
+        print(f"  保留点数: {num_kept}")
+        print(f"  移除比例: {num_removed/len(points)*100:.2f}%")
+        
+        # 创建过滤后的点云
+        filtered_points = points[keep_mask]
+        filtered_pcd = o3d.geometry.PointCloud()
+        filtered_pcd.points = o3d.utility.Vector3dVector(filtered_points)
+        
+        # 如果有颜色信息，也保留
+        if self.pcd.has_colors():
+            colors = np.asarray(self.pcd.colors)
+            filtered_pcd.colors = o3d.utility.Vector3dVector(colors[keep_mask])
+        
+        return filtered_pcd
+    
+    def save_filtered_pcd(self, filtered_pcd):
+        """保存过滤后的点云"""
+        output_path = os.path.join(self.map_dir, f"{self.map_name}_final.pcd")
+        
+        print(f"\n保存最终点云: {output_path}")
+        o3d.io.write_point_cloud(output_path, filtered_pcd)
+        print("保存成功!")
+        
+        return output_path
+    
+    def process(self):
+        """执行完整的过滤流程"""
+        # 1. 加载配置
+        if not self.load_z_range_data():
+            return False
+        
+        # 2. 加载PCD
+        if not self.load_pcd():
+            return False
+        
+        # 3. 加载地图
+        if not self.load_maps():
+            return False
+        
+        # 4. 找出擦除区域（阈值30，更灵敏）
+        erased_mask = self.find_erased_regions(threshold=30)
+        
+        # 5. 转换为世界坐标
+        erased_regions = self.map_pixels_to_world_coords(erased_mask)
+        
+        # 6. 过滤点云
+        filtered_pcd = self.filter_points(erased_regions)
+        
+        # 7. 保存结果
+        output_path = self.save_filtered_pcd(filtered_pcd)
+        
+        print(f"\n=== 处理完成 ===")
+        print(f"最终点云: {output_path}")
+        
+        return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description='根据编辑后的地图过滤点云')
+    parser.add_argument('--config', '-c', type=str, default=None,
+                        help='z轴范围配置JSON文件路径')
+    parser.add_argument('--map-name', '-n', type=str, default='map_demo',
+                        help='地图名称')
+    parser.add_argument('--map-dir', '-d', type=str, 
+                        default='/media/data/slam_ws/src/kuavo_slam/maps',
+                        help='地图基础目录')
+    
+    args = parser.parse_args()
+    
+    # 设置默认配置文件路径
+    if args.config is None:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        package_dir = os.path.dirname(script_dir)
+        args.config = os.path.join(package_dir, 'data', 'z_range_data.json')
+    
+    # 创建过滤器
+    filter_obj = PCDMapFilter(args.config, args.map_name, args.map_dir)
+    
+    # 执行过滤
+    success = filter_obj.process()
+    sys.exit(0 if success else 1)
+
+
+if __name__ == '__main__':
+    main()
+
