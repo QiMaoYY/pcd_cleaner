@@ -47,10 +47,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate demo
 
-# ROS 环境（用于 roslaunch/map_saver）
-source /media/data/slam_ws/devel/setup.bash
-source /media/data/slam_ws/roslib/devel/setup.bash
-
 echo -e "${GREEN}地图根目录: ${MAP_ROOT}${NC}"
 echo -e "${GREEN}地图名: ${MAP_NAME}${NC}"
 echo -e "${GREEN}屋顶阈值: ${CEILING_THRESHOLD}${NC}"
