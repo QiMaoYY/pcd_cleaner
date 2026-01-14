@@ -160,8 +160,7 @@ include_directories(
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-  scripts/extract_ground_ceiling.py
-  scripts/pcd_to_map.py
+  scripts/preprocess_and_map2d.py
   scripts/filter_pcd_by_map.py
   scripts/edit_map.py
   scripts/run_all.sh

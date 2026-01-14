@@ -39,7 +39,11 @@ class PCDMapFilter:
     def load_z_range_data(self):
         """加载z轴范围数据"""
         print(f"加载配置: {self.z_range_json_path}")
-        
+
+        if not os.path.exists(self.z_range_json_path):
+            print(f"错误: 配置文件不存在: {self.z_range_json_path}")
+            return False
+
         with open(self.z_range_json_path, 'r') as f:
             self.z_data = json.load(f)
         
@@ -50,7 +54,7 @@ class PCDMapFilter:
     
     def load_pcd(self):
         """加载PCD点云"""
-        pcd_path = self.z_data['output_pcd']
+        pcd_path = os.path.join(self.map_dir, "pointcloud_tmp.pcd")
         
         if not os.path.exists(pcd_path):
             print(f"错误: PCD文件不存在: {pcd_path}")
@@ -65,9 +69,9 @@ class PCDMapFilter:
     
     def load_maps(self):
         """加载原始地图和清理地图"""
-        original_map_path = os.path.join(self.map_dir, f"{self.map_name}.pgm")
-        cleaned_map_path = os.path.join(self.map_dir, f"{self.map_name}_cleaned.pgm")
-        map_yaml_path = os.path.join(self.map_dir, f"{self.map_name}.yaml")
+        original_map_path = os.path.join(self.map_dir, "map2d_init.pgm")
+        cleaned_map_path = os.path.join(self.map_dir, "map2d.pgm")
+        map_yaml_path = os.path.join(self.map_dir, "map2d.yaml")
         
         # 检查文件存在
         if not os.path.exists(original_map_path):
@@ -89,6 +93,12 @@ class PCDMapFilter:
         
         self.original_map = cv2.imread(original_map_path, cv2.IMREAD_GRAYSCALE)
         self.cleaned_map = cv2.imread(cleaned_map_path, cv2.IMREAD_GRAYSCALE)
+        if self.original_map is None:
+            print(f"错误: 无法读取原始地图: {original_map_path}")
+            return False
+        if self.cleaned_map is None:
+            print(f"错误: 无法读取清理地图: {cleaned_map_path}")
+            return False
         
         # 加载地图配置
         with open(map_yaml_path, 'r') as f:
@@ -274,7 +284,7 @@ class PCDMapFilter:
     
     def save_filtered_pcd(self, filtered_pcd):
         """保存过滤后的点云"""
-        output_path = os.path.join(self.map_dir, f"{self.map_name}_final.pcd")
+        output_path = os.path.join(self.map_dir, "pointcloud.pcd")
         
         print(f"\n保存最终点云: {output_path}")
         o3d.io.write_point_cloud(output_path, filtered_pcd)
@@ -316,8 +326,6 @@ class PCDMapFilter:
 
 def main():
     parser = argparse.ArgumentParser(description='根据编辑后的地图过滤点云')
-    parser.add_argument('--config', '-c', type=str, default=None,
-                        help='z轴范围配置JSON文件路径')
     parser.add_argument('--map-name', '-n', type=str, default='map_demo',
                         help='地图名称')
     parser.add_argument('--map-dir', '-d', type=str, 
@@ -327,13 +335,9 @@ def main():
     args = parser.parse_args()
     
     # 设置默认配置文件路径
-    if args.config is None:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        package_dir = os.path.dirname(script_dir)
-        args.config = os.path.join(package_dir, 'data', 'z_range_data.json')
-    
+    config_dir = args.map_dir + "/" + args.map_name + "/range_z.json"
     # 创建过滤器
-    filter_obj = PCDMapFilter(args.config, args.map_name, args.map_dir)
+    filter_obj = PCDMapFilter(config_dir, args.map_name, args.map_dir)
     
     # 执行过滤
     success = filter_obj.process()

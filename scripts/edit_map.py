@@ -45,6 +45,11 @@ def main() -> int:
     parser.add_argument("--edited-pgm", default="map2d.pgm", help="编辑pgm文件名（默认map2d.pgm）")
     parser.add_argument("--edited-yaml", default="map2d.yaml", help="输出yaml文件名（默认map2d.yaml）")
     parser.add_argument("--sketch", default="sketch.png", help="输出png文件名（默认sketch.png）")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="继续编辑：直接打开已存在的编辑地图（不会从init复制）。若编辑地图不存在则仍会从init复制。",
+    )
     args = parser.parse_args()
 
     map_dir = _abs(args.map_dir) if args.map_dir else _abs(os.path.join(args.base_dir, args.map_name))
@@ -64,8 +69,12 @@ def main() -> int:
         print(f"错误：原始yaml不存在：{init_yaml}")
         return 1
 
-    # 1) 复制 init -> edited
-    shutil.copyfile(init_pgm, edited_pgm)
+    # 1) 复制 init -> edited（或继续编辑）
+    if args.resume and os.path.exists(edited_pgm):
+        print(f"继续编辑：{edited_pgm}")
+    else:
+        shutil.copyfile(init_pgm, edited_pgm)
+        print(f"已准备编辑地图：{edited_pgm}")
 
     # 2) 启动编辑器并等待退出
     if shutil.which(args.editor) is None:
