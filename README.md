@@ -6,7 +6,7 @@
 
 ```bash
 conda activate demo
-pip3 install open3d numpy scikit-learn opencv-python pyyaml tqdm
+pip3 install open3d numpy scikit-learn opencv-python pyyaml
 ```
 
 ## 快速使用

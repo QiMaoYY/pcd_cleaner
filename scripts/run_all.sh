@@ -47,10 +47,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate demo
 
-echo -e "${GREEN}地图根目录: ${MAP_ROOT}${NC}"
-echo -e "${GREEN}地图名: ${MAP_NAME}${NC}"
-echo -e "${GREEN}屋顶阈值: ${CEILING_THRESHOLD}${NC}"
-echo -e "${GREEN}运行方式: ${MODE}${NC}"
+echo -e "${GREEN}maps: ${MAP_ROOT}/${MAP_NAME} | ceiling=${CEILING_THRESHOLD} | mode=${MODE}${NC}"
 
 case "$MODE" in
   0)
@@ -85,13 +82,4 @@ case "$MODE" in
     ;;
 esac
 
-echo -e "${GREEN}=== 完成！===${NC}"
-echo "输出位置: ${MAP_ROOT}/${MAP_NAME}/"
-echo "  - pointcloud_original.pcd   原始点云(输入)"
-echo "  - pointcloud_tmp.pcd        预处理点云(步骤1输出)"
-echo "  - range_z.json              地面范围/屋顶阈值"
-echo "  - map2d_init.pgm/.yaml      初始2D地图(步骤2输出)"
-echo "  - map2d.pgm                 编辑后的2D地图(步骤3输出)"
-echo "  - map2d.yaml                指向编辑地图的yaml(步骤3输出)"
-echo "  - sketch.png                编辑地图png预览(步骤3输出)"
-echo "  - pointcloud.pcd            最终点云(步骤4输出)"
+echo -e "${GREEN}done: ${MAP_ROOT}/${MAP_NAME}${NC}"
