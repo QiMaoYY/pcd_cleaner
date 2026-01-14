@@ -120,7 +120,6 @@ class PreprocessAndMap2D:
             out_prefix=out_prefix,
             thre_z_min=thre_z_min,
             thre_z_max=thre_z_max,
-            flag_pass_through=0,
             resolution=0.05,
             chunk_size=2_000_000,
         )
