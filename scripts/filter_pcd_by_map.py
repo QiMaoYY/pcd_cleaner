@@ -37,7 +37,6 @@ class PCDMapFilter:
         
     def load_z_range_data(self):
         """加载z轴范围数据"""
-        print(f"读取配置: {self.z_range_json_path}")
 
         if not os.path.exists(self.z_range_json_path):
             print(f"错误: 配置文件不存在: {self.z_range_json_path}")
@@ -58,7 +57,6 @@ class PCDMapFilter:
             print(f"错误: PCD文件不存在: {pcd_path}")
             return False
         
-        print(f"加载点云: {pcd_path}")
         self.pcd = o3d.io.read_point_cloud(pcd_path)
         points = np.asarray(self.pcd.points)
         print(f"点数: {len(points)}")
@@ -85,8 +83,7 @@ class PCDMapFilter:
             return False
         
         # 加载地图图像
-        print(f"加载地图: {original_map_path} / {cleaned_map_path}")
-        
+
         self.original_map = cv2.imread(original_map_path, cv2.IMREAD_GRAYSCALE)
         self.cleaned_map = cv2.imread(cleaned_map_path, cv2.IMREAD_GRAYSCALE)
         if self.original_map is None:
@@ -236,7 +233,6 @@ class PCDMapFilter:
         """保存过滤后的点云"""
         output_path = os.path.join(self.map_dir, "pointcloud.pcd")
         
-        print(f"\n保存最终点云: {output_path}")
         o3d.io.write_point_cloud(output_path, filtered_pcd)
         print("保存成功!")
         
@@ -269,7 +265,6 @@ class PCDMapFilter:
         output_path = self.save_filtered_pcd(filtered_pcd)
         
         print(f"\n=== 处理完成 ===")
-        print(f"最终点云: {output_path}")
         
         return True
 

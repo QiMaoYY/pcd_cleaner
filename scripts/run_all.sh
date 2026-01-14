@@ -3,12 +3,6 @@
 
 set -e  # 遇到错误立即退出
 
-# 颜色输出
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
 show_help() {
   echo "用法: $0 [地图根目录] [地图名] [屋顶高度阈值] [运行方式]"
   echo ""
@@ -47,39 +41,39 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate demo
 
-echo -e "${GREEN}maps: ${MAP_ROOT}/${MAP_NAME} | ceiling=${CEILING_THRESHOLD} | mode=${MODE}${NC}"
+echo "maps: ${MAP_ROOT}/${MAP_NAME} | ceiling=${CEILING_THRESHOLD} | mode=${MODE}"
 
 case "$MODE" in
   0)
-    echo -e "${BLUE}[1/3] 点云清理 + 2D转换...${NC}"
+    echo "[1/3] 点云清理 + 2D转换..."
     python3 "$SCRIPT_DIR/preprocess_and_map2d.py" -r "$MAP_ROOT" -n "$MAP_NAME" -c "$CEILING_THRESHOLD"
 
-    echo -e "${BLUE}[2/3] 编辑2D地图（从init重新开始）...${NC}"
+    echo "[2/3] 编辑2D地图（从init重新开始）..."
     python3 "$SCRIPT_DIR/edit_map.py" --base-dir "$MAP_ROOT" --map-name "$MAP_NAME"
 
-    echo -e "${BLUE}[3/3] 智能点云过滤...${NC}"
+    echo "[3/3] 智能点云过滤..."
     python3 "$SCRIPT_DIR/filter_pcd_by_map.py" -d "$MAP_ROOT" -n "$MAP_NAME"
     ;;
   1)
-    echo -e "${BLUE}[1/1] 点云清理 + 2D转换...${NC}"
+    echo "[1/1] 点云清理 + 2D转换..."
     python3 "$SCRIPT_DIR/preprocess_and_map2d.py" -r "$MAP_ROOT" -n "$MAP_NAME" -c "$CEILING_THRESHOLD"
     ;;
   2)
-    echo -e "${BLUE}[1/1] 编辑2D地图（从init重新开始）...${NC}"
+    echo "[1/1] 编辑2D地图（从init重新开始）..."
     python3 "$SCRIPT_DIR/edit_map.py" --base-dir "$MAP_ROOT" --map-name "$MAP_NAME"
     ;;
   3)
-    echo -e "${BLUE}[1/1] 智能点云过滤...${NC}"
+    echo "[1/1] 智能点云过滤..."
     python3 "$SCRIPT_DIR/filter_pcd_by_map.py" -d "$MAP_ROOT" -n "$MAP_NAME"
     ;;
   4)
-    echo -e "${BLUE}[1/1] 继续编辑2D地图（不从init复制）...${NC}"
+    echo "[1/1] 继续编辑2D地图（不从init复制）..."
     python3 "$SCRIPT_DIR/edit_map.py" --base-dir "$MAP_ROOT" --map-name "$MAP_NAME" --resume
     ;;
   *)
-    echo -e "${YELLOW}未知运行方式: ${MODE}${NC}"
+    echo "未知运行方式: ${MODE}"
     show_help
     ;;
 esac
 
-echo -e "${GREEN}done: ${MAP_ROOT}/${MAP_NAME}${NC}"
+echo "done: ${MAP_ROOT}/${MAP_NAME}"
