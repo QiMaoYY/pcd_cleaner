@@ -163,7 +163,7 @@ catkin_install_python(PROGRAMS
   scripts/extract_ground_ceiling.py
   scripts/pcd_to_map.py
   scripts/filter_pcd_by_map.py
-  scripts/edit_map.sh
+  scripts/edit_map.py
   scripts/run_all.sh
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

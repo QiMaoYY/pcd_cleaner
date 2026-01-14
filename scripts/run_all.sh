@@ -9,27 +9,14 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# 显示帮助信息
 show_help() {
-    echo "用法: $0 [起始步骤] [输入PCD] [地图名] [屋顶阈值]"
-    echo ""
-    echo "参数:"
-    echo "  起始步骤      从哪一步开始运行 (s1|s2|s3|s4, 默认: s1)"
-    echo "  输入PCD       输入PCD文件路径 (默认: /media/data/slam_ws/src/kuavo_slam/PCD/scans.pcd)"
-    echo "  地图名        地图名称 (默认: map_demo)"
-    echo "  屋顶阈值      屋顶高度阈值 (默认: 0.8)"
-    echo ""
-    echo "示例:"
-    echo "  $0                                    # 从步骤1开始，使用默认参数"
-    echo "  $0 s2                                 # 从步骤2开始"
-    echo "  $0 s1 /path/to/scans.pcd my_map 0.8  # 自定义所有参数"
-    echo ""
-    echo "步骤说明:"
-    echo "  s1 - 点云清理（提取地面和屋顶，去除噪声）"
-    echo "  s2 - 转换栅格地图（PCD转2D地图）"
-    echo "  s3 - 编辑地图（手动擦除杂质）"
-    echo "  s4 - 智能点云过滤（根据编辑后的地图过滤点云）"
-    exit 0
+  echo "用法: $0 [起始步骤] [输入PCD] [地图名] [屋顶阈值]"
+  echo "  起始步骤: s1|s2|s3|s4 (默认s1)"
+  echo "示例:"
+  echo "  $0"
+  echo "  $0 s2"
+  echo "  $0 s1 /path/to/scans.pcd my_map 0.8"
+  exit 0
 }
 
 # 解析起始步骤参数
@@ -47,14 +34,6 @@ MAP_NAME=${2:-"map_demo"}
 CEILING_THRESHOLD=${3:-"0.8"}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo -e "${GREEN}=== PCD Cleaner 完整流程 ===${NC}\n"
-echo "起始步骤: $START_STEP"
-echo "输入PCD: $INPUT_PCD"
-echo "地图名称: $MAP_NAME"
-echo "屋顶阈值: $CEILING_THRESHOLD"
-echo ""
-
 # 激活conda环境
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate demo
@@ -96,7 +75,7 @@ fi
 # 步骤3：编辑地图
 if [[ "$START_STEP" =~ ^s[1-3]$ ]]; then
     echo -e "${BLUE}[步骤 3/4] 编辑栅格地图...${NC}"
-    "$SCRIPT_DIR/edit_map.sh" "$MAP_NAME" /media/data/slam_ws/src/kuavo_slam/maps
+    python3 "$SCRIPT_DIR/edit_map.py" --map-name "$MAP_NAME" --base-dir /media/data/slam_ws/src/kuavo_slam/maps
     
     if [ $? -ne 0 ]; then
         echo -e "${YELLOW}地图编辑失败${NC}"
