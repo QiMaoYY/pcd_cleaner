@@ -1,4 +1,4 @@
-# PCD Cleaner
+# Map Editor
 
 点云清理工具包，用于SLAM点云地图噪声去除和处理。
 
@@ -12,7 +12,7 @@ pip3 install open3d numpy scikit-learn opencv-python pyyaml
 ## 快速使用
 
 ```bash
-cd /media/data/slam_ws/src/pcd_cleaner/scripts
+cd /media/data/slam_ws/src/map_editor/scripts
 conda activate demo
 
 # 完整流程（推荐）
@@ -113,7 +113,7 @@ python3 scripts/filter_pcd_by_map.py \
 ## 项目结构
 
 ```
-pcd_cleaner/
+map_editor/
 ├── scripts/
 │   ├── extract_ground_ceiling.py  # 步骤1：地面和屋顶提取
 │   ├── pcd_to_map.py              # 步骤2：点云转栅格地图

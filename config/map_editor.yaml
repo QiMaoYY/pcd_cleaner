@@ -1,4 +1,4 @@
-# PCD Cleaner 配置文件
+# Map Editor 配置文件
 
 # 屋顶去除参数
 ceiling:
@@ -23,5 +23,5 @@ grid_map:
 # 文件路径
 paths:
   input_pcd: "/media/data/slam_ws/src/kuavo_slam/PCD/scans.pcd"
-  output_dir: "/media/data/slam_ws/src/pcd_cleaner/data"
-  z_range_data: "/media/data/slam_ws/src/pcd_cleaner/data/z_range_data.json"
+  output_dir: "/media/data/slam_ws/src/map_editor/data"
+  z_range_data: "/media/data/slam_ws/src/map_editor/data/z_range_data.json"
