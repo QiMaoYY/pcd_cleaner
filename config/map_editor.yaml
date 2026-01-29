@@ -25,3 +25,6 @@ paths:
   input_pcd: "/media/data/slam_ws/src/kuavo_slam/PCD/scans.pcd"
   output_dir: "/media/data/slam_ws/src/map_editor/data"
   z_range_data: "/media/data/slam_ws/src/map_editor/data/z_range_data.json"
+
+# ICP参考点云体素降采样（米）
+filter_size_map: 0.03

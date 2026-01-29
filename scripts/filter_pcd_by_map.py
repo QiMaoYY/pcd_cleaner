@@ -16,7 +16,7 @@ import yaml
 
 
 class PCDMapFilter:
-    def __init__(self, z_range_json_path, map_name, map_base_dir):
+    def __init__(self, z_range_json_path, map_name, map_base_dir, config_path=None):
         """
         初始化点云地图过滤器
         
@@ -28,12 +28,33 @@ class PCDMapFilter:
         self.z_range_json_path = z_range_json_path
         self.map_name = map_name
         self.map_dir = os.path.join(map_base_dir, map_name)
+        self.config_path = config_path or self._default_config_path()
         
         self.z_data = None
         self.pcd = None
         self.original_map = None
         self.cleaned_map = None
         self.map_info = None
+        self.filter_size_map = 0.05
+
+    @staticmethod
+    def _default_config_path():
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        return os.path.normpath(os.path.join(script_dir, "..", "config", "map_editor.yaml"))
+
+    def load_global_config(self):
+        """加载全局配置（体素滤波参数）"""
+        if not os.path.exists(self.config_path):
+            print(f"警告: 配置文件不存在: {self.config_path}，使用默认体素 {self.filter_size_map}m")
+            return True
+
+        try:
+            with open(self.config_path, 'r') as f:
+                cfg = yaml.safe_load(f) or {}
+            self.filter_size_map = float(cfg.get('filter_size_map', self.filter_size_map))
+        except Exception as e:
+            print(f"警告: 读取配置失败: {e}，使用默认体素 {self.filter_size_map}m")
+        return True
         
     def load_z_range_data(self):
         """加载z轴范围数据"""
@@ -228,6 +249,18 @@ class PCDMapFilter:
             filtered_pcd.colors = o3d.utility.Vector3dVector(colors[keep_mask])
         
         return filtered_pcd
+
+    def voxel_downsample(self, pcd):
+        """对最终点云进行体素降采样"""
+        if self.filter_size_map <= 0:
+            print("体素大小<=0，跳过降采样")
+            return pcd
+
+        before = len(pcd.points)
+        down_pcd = pcd.voxel_down_sample(self.filter_size_map)
+        after = len(down_pcd.points)
+        print(f"体素降采样: voxel={self.filter_size_map}m, {before} -> {after}")
+        return down_pcd
     
     def save_filtered_pcd(self, filtered_pcd):
         """保存过滤后的点云"""
@@ -240,6 +273,9 @@ class PCDMapFilter:
     
     def process(self):
         """执行完整的过滤流程"""
+        # 0. 加载全局配置（体素滤波参数）
+        self.load_global_config()
+
         # 1. 加载配置
         if not self.load_z_range_data():
             return False
@@ -260,6 +296,9 @@ class PCDMapFilter:
         
         # 6. 过滤点云
         filtered_pcd = self.filter_points(erased_regions)
+
+        # 6.1 体素降采样（用于ICP参考点云）
+        filtered_pcd = self.voxel_downsample(filtered_pcd)
         
         # 7. 保存结果
         output_path = self.save_filtered_pcd(filtered_pcd)
@@ -276,13 +315,15 @@ def main():
     parser.add_argument('--map-dir', '-d', type=str, 
                         default='/media/data/slam_ws/src/kuavo_slam/maps',
                         help='地图基础目录')
+    parser.add_argument('--config', type=str, default=None,
+                        help='map_editor配置文件路径（默认使用包内config/map_editor.yaml）')
     
     args = parser.parse_args()
     
     # 设置默认配置文件路径
     config_dir = args.map_dir + "/" + args.map_name + "/range_z.json"
     # 创建过滤器
-    filter_obj = PCDMapFilter(config_dir, args.map_name, args.map_dir)
+    filter_obj = PCDMapFilter(config_dir, args.map_name, args.map_dir, args.config)
     
     # 执行过滤
     success = filter_obj.process()
