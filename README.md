@@ -16,12 +16,12 @@ cd /media/data/slam_ws/src/map_editor/scripts
 conda activate demo
 
 # 完整流程（推荐）
-./run_all.sh [起始步骤] [输入PCD] [地图名] [屋顶阈值]
+./run_all.sh [地图根目录] [地图名] [屋顶高度阈值] [运行方式]
 
 # 示例
-./run_all.sh                                        # 从步骤1开始，使用默认参数
-./run_all.sh s2                                     # 从步骤2开始
-./run_all.sh s1 /path/to/scans.pcd my_map 0.8     # 自定义参数
+./run_all.sh                                        # 默认参数（全流程）
+./run_all.sh /media/data/slam_ws/src/kuavo_slam/maps test2 0.8 1
+./run_all.sh /media/data/slam_ws/src/kuavo_slam/maps test2 0.8 4
 
 # 查看帮助
 ./run_all.sh --help
@@ -29,81 +29,65 @@ conda activate demo
 
 ## 分步使用
 
-### 第一步：地面和屋顶提取及点云清理
+### 第一步：地面提取与2D地图初始化
 
 ```bash
 conda activate demo
-python3 scripts/extract_ground_ceiling.py \
-    -i /media/data/slam_ws/src/kuavo_slam/PCD/scans.pcd \
-    -c 0.8 \
-    -m 0.1
+python3 scripts/preprocess_and_map2d.py \
+    -r /media/data/slam_ws/src/kuavo_slam/maps \
+    -n map_demo \
+    -c 0.8
 ```
 
-**功能**：去除屋顶、提取地面范围、去除地面以下点
+**功能**：提取地面范围、去除地面以下点，并生成 map2d_init.pgm/yaml  
+**说明**：当前流程不再进行屋顶过滤，`-c` 仅作为生成 2D 地图的上限阈值使用
 
 **输出**：
-- `data/z_range_data.json` - z轴范围配置
-- `scans_cleaned.pcd` - 清理后的点云
+- `<地图根目录>/<地图名>/range_z.json` - z轴范围配置
+- `<地图根目录>/<地图名>/pointcloud_tmp.pcd` - 预处理点云
+- `<地图根目录>/<地图名>/map2d_init.pgm/.yaml` - 初始2D地图
 
-### 第二步：点云转栅格地图
-
-```bash
-conda activate demo
-python3 scripts/pcd_to_map.py \
-    -c data/z_range_data.json \
-    -n map_demo
-```
-
-**功能**：调用pcd2pgm转换，自动保存地图
-
-**输出**：
-- `<地图名>.pgm/.yaml` - 栅格地图
-
-### 第三步：编辑栅格地图
+### 第二步：编辑栅格地图
 
 ```bash
-./scripts/edit_map.sh map_demo /media/data/slam_ws/src/kuavo_slam/maps
+python3 scripts/edit_map.py --base-dir /media/data/slam_ws/src/kuavo_slam/maps --map-name map_demo
 ```
 
 **功能**：使用kolourpaint手动擦除杂质
 
 **输出**：
-- `<地图名>_cleaned.pgm` - 编辑后的地图
+- `<地图根目录>/<地图名>/map2d.pgm/.yaml` - 编辑后的地图
 
-### 第四步：智能点云过滤
+### 第三步：智能点云过滤
 
 ```bash
 conda activate demo
 python3 scripts/filter_pcd_by_map.py \
-    -c data/z_range_data.json \
+    -d /media/data/slam_ws/src/kuavo_slam/maps \
     -n map_demo
 ```
 
-**功能**：根据地图差异过滤点云（地面点豁免）
+**功能**：根据地图差异过滤点云（地面点豁免），并进行体素降采样  
+**配置**：体素尺寸 `filter_size_map` 位于 `config/map_editor.yaml`
 
 **输出**：
-- `<地图名>_final.pcd` - 最终清理的点云
+- `<地图根目录>/<地图名>/pointcloud.pcd` - 最终ICP参考点云
 
 ## 处理流程
 
-1. **地面和屋顶提取** ✓
-   - 去除z > ceiling_threshold的屋顶点
+1. **地面提取与2D地图初始化** ✓
    - 提取地面平面并计算z轴范围
    - 去除z < ground_z_min - margin的地面以下点
+   - 生成 map2d_init.pgm/yaml（ceiling_threshold 仅用于2D地图高度上限）
 
-2. **点云转栅格地图** ✓
-   - 自动读取第一步配置
-   - 调用pcd2pgm转换
-   - 使用map_saver自动保存地图
+2. **地图编辑** ✓
+   - 复制原始地图为 map2d.pgm
+   - 使用编辑器手动擦除杂质并生成 map2d.yaml
 
-3. **地图编辑** ✓
-   - 复制原始地图为_cleaned版本
-   - 使用kolourpaint编辑器手动擦除杂质
-
-4. **智能点云过滤** ✓
+3. **智能点云过滤** ✓
    - 比对原始地图和清理地图，找出擦除区域
    - 转换像素坐标为世界坐标（考虑分辨率和原点对齐）
-   - 过滤对应点云（地面点享有豁免权）
+   - 过滤对应点云并进行体素降采样
 
 ## 依赖
 
@@ -115,11 +99,12 @@ python3 scripts/filter_pcd_by_map.py \
 ```
 map_editor/
 ├── scripts/
-│   ├── extract_ground_ceiling.py  # 步骤1：地面和屋顶提取
-│   ├── pcd_to_map.py              # 步骤2：点云转栅格地图
-│   ├── edit_map.sh                # 步骤3：地图编辑
-│   ├── filter_pcd_by_map.py       # 步骤4：智能点云过滤
-│   └── run_all.sh                 # 完整流程脚本
+│   ├── preprocess_and_map2d.py    # 步骤1：预处理+生成map2d_init
+│   ├── edit_map.py                # 步骤2：地图编辑
+│   ├── filter_pcd_by_map.py       # 步骤3：智能点云过滤+体素降采样
+│   ├── run_all.sh                 # 完整流程脚本
+│   ├── pcd_to_pgm.py              # 工具：PCD转PGM/YAML
+│   └── extract_ground_ceiling.py  # 旧版单步脚本（可选）
 ├── data/                          # 数据目录
 ├── config/                        # 配置文件
 └── README.md
