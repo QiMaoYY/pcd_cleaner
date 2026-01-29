@@ -3,13 +3,12 @@
 """
 步骤1+2 合并版：
 从 <地图根目录>/<地图名>/pointcloud_original.pcd 读取原始点云
-1) 去除屋顶（z > ceiling）
-2) 提取地面（RANSAC），计算 ground_z_range
-3) 去除地面以下点（z < ground_z_min - 0.1）
-4) 输出：
+1) 提取地面（RANSAC），计算 ground_z_range
+2) 去除地面以下点（z < ground_z_min - 0.1）
+3) 输出：
    - <地图根目录>/<地图名>/range_z.json
    - <地图根目录>/<地图名>/pointcloud_tmp.pcd
-5) 生成 2D 栅格地图（纯Python，直接写 pgm+yaml）：
+4) 生成 2D 栅格地图（纯Python，直接写 pgm+yaml）：
    - <地图根目录>/<地图名>/map2d_init.pgm
    - <地图根目录>/<地图名>/map2d_init.yaml（image 为绝对路径）
 """
@@ -57,11 +56,6 @@ class PreprocessAndMap2D:
             colors = np.asarray(pcd.colors)
             out.colors = o3d.utility.Vector3dVector(colors[keep_mask])
         return out
-
-    def remove_ceiling(self, pcd: o3d.geometry.PointCloud) -> o3d.geometry.PointCloud:
-        pts = np.asarray(pcd.points)
-        keep = pts[:, 2] <= self.ceiling
-        return self._pcd_from_mask(pcd, keep)
 
     def extract_ground_range(self, pcd: o3d.geometry.PointCloud, distance_threshold=0.05, ransac_n=3, num_iterations=1000, percentile=95):
         pts = np.asarray(pcd.points)
@@ -133,14 +127,15 @@ class PreprocessAndMap2D:
         pts = np.asarray(pcd.points)
         print(f"原始点数: {pts.shape[0]}")
 
-        pcd_no_ceiling = self.remove_ceiling(pcd)
-        pts2 = np.asarray(pcd_no_ceiling.points)
-        print(f"去屋顶后点数: {pts2.shape[0]}")
+        # 已取消屋顶过滤，直接使用原始点云
+        pcd_for_ground = pcd
+        pts2 = np.asarray(pcd_for_ground.points)
+        print(f"用于地面提取点数: {pts2.shape[0]}")
 
-        self.extract_ground_range(pcd_no_ceiling)
+        self.extract_ground_range(pcd_for_ground)
         print(f"地面z范围: [{self.ground_z_range['min']:.3f}, {self.ground_z_range['max']:.3f}]")
 
-        tmp = self.remove_below_ground(pcd_no_ceiling, margin=0.1)
+        tmp = self.remove_below_ground(pcd_for_ground, margin=0.1)
         pts3 = np.asarray(tmp.points)
         print(f"去地面以下后点数: {pts3.shape[0]}")
 
